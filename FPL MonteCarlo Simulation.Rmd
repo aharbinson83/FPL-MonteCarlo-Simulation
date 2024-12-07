@@ -1,0 +1,109 @@
+---
+title: "FPL Monte Carlo Simulation for Draws"
+output: html_notebook
+---
+
+
+There have been 14 games played so far and my current record is 6/5/3 - 5 draws sees highly improbable given the range of possible scores the home team and away team can have each week.
+
+Have used ChatGPT to generate some code to run this through a montecarlo simulation.
+
+```{r}
+# Load necessary libraries
+library(readxl)  # For reading Excel files
+library(ggplot2) # For plotting
+library(dplyr)   # For data manipulation
+library(tidyr)   # For reshaping data
+
+# Step 1: Read data from Excel
+file_path <- "FPL Home and Away Scores.xlsx"  # Update this with your file's path
+scores <- read_excel(file_path)
+
+# Step 2: Generate distribution graphs
+plot1 <- ggplot(scores, aes(x = Home)) +
+  geom_histogram(binwidth = 1, fill = "blue", alpha = 0.7) +
+  labs(title = "Distribution of Home Scores", x = "Score", y = "Frequency") +
+  theme_minimal()
+
+plot2 <- ggplot(scores, aes(x = Away)) +
+  geom_histogram(binwidth = 1, fill = "red", alpha = 0.7) +
+  labs(title = "Distribution of Away Scores", x = "Score", y = "Frequency") +
+  theme_minimal()
+
+plot1
+plot2
+
+# Step 3: Analyze the distributions
+home_mean <- mean(scores$Home)
+home_sd <- sd(scores$Home)
+away_mean <- mean(scores$Away)
+away_sd <- sd(scores$Away)
+
+cat("Home Mean:", home_mean, "Home SD:", home_sd, "\n")
+cat("Away Mean:", away_mean, "Away SD:", away_sd, "\n")
+
+# Step 4: Define simulation parameters
+#set.seed(123) # For reproducibility, don't think want a seed as want it to generate new random numbers for each distribution
+n_simulations <- 100000
+n_fixtures <- 14  # simulate 14 fixtures for a player
+
+# Initialize variables
+exact_match_count <- 0
+max_draws <- 0  # To track the maximum number of draws observed
+max_draw_simulation <- NULL  # Store the simulation results with the maximum draws
+
+# Step 5: Run Monte Carlo simulations
+for (i in 1:n_simulations) {
+  # Generate simulated scores as integers
+  home_simulated <- round(rnorm(n_fixtures, mean = home_mean, sd = home_sd))
+  away_simulated <- round(rnorm(n_fixtures, mean = away_mean, sd = away_sd))
+  
+  # Determine outcomes
+  results <- data.frame(
+    Home_Score = home_simulated,
+    Away_Score = away_simulated
+  ) %>%
+    mutate(
+      Result = case_when(
+        abs(Home_Score - Away_Score) == 0 ~ "Draw",
+        Home_Score > Away_Score ~ "Home Win",
+        TRUE ~ "Away Win"
+      )
+    )
+  
+  # Count results
+  result_summary <- results %>%
+    count(Result) %>%
+    spread(Result, n, fill = 0) %>%
+    mutate(
+      Wins = ifelse("Home Win" %in% colnames(.), `Home Win`, 0),
+      Draws = ifelse("Draw" %in% colnames(.), Draw, 0),
+      Losses = ifelse("Away Win" %in% colnames(.), `Away Win`, 0)
+    )
+  
+  # Check for exact match
+  if (result_summary$Wins == 6 & result_summary$Draws == 5 & result_summary$Losses == 3) {
+    exact_match_count <- exact_match_count + 1
+  }
+  
+    # Update maximum draws
+  if (result_summary$Draws > max_draws) {
+    max_draws <- result_summary$Draws
+    max_draw_simulation <- results  # Store the results of this simulation
+  }
+  
+   # Add progress message every 1,000 iterations
+  if (i %% 1000 == 0) {
+    message(sprintf("Completed %d/%d simulations", i, n_simulations))
+  }
+}
+
+# Step 6: Calculate probability
+probability <- exact_match_count / n_simulations
+cat("Likelihood of 6 Wins, 5 Draws, 3 Losses:", probability, "\n")
+
+
+
+
+```
+
